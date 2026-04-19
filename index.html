@@ -7,7 +7,7 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; touch-action: none; }
   body {
-    background: linear-gradient(180deg, #3a0a5e, #12002b);
+    background: linear-gradient(#4a0066, #1a0022);
     font-family: Arial, sans-serif;
     color: white;
     text-align: center;
@@ -15,15 +15,18 @@
     display: flex;
     flex-direction: column;
   }
-  h1 { font-size: 36px; margin: 15px 0 5px; text-shadow: 0 0 20px #ff00ff; }
-  .stats { display: flex; justify-content: space-around; background: rgba(0,0,0,0.5); padding: 10px; margin: 0 20px; border-radius: 15px; }
-  canvas { 
-    margin: 15px auto; 
-    border: 18px solid #fff; 
-    border-radius: 30px; 
-    box-shadow: 0 25px 60px rgba(0,0,0,0.8);
-    background: #1a0033;
-    max-width: 96%;
+  h1 { font-size: 38px; margin: 15px 0 8px; text-shadow: 0 0 25px #ff00ff; }
+  .stats {
+    display: flex; justify-content: space-around; background: rgba(0,0,0,0.6);
+    padding: 12px; margin: 0 20px 10px; border-radius: 20px; font-size: 19px;
+  }
+  canvas {
+    margin: 10px auto;
+    border: 20px solid #ffffff;
+    border-radius: 32px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.9);
+    background: #0f001a;
+    max-width: 98%;
   }
 </style>
 </head>
@@ -32,24 +35,29 @@
   <div class="stats">
     <div>Nivel: <b id="level">1</b></div>
     <div>Scor: <b id="score">0</b></div>
-    <div>Mutări: <b id="moves">20</b></div>
+    <div>Mutări: <b id="moves">25</b></div>
   </div>
   <canvas id="game" width="400" height="400"></canvas>
-  <p style="margin-top:10px; font-size:18px;">👆 Swipe sau click pe bomboane ca să le muți</p>
 
 <script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const SIZE = 50;
+// ==================== CANDY CRUSH CLONE - FOARTE APROPIAT ====================
 const ROWS = 8;
 const COLS = 8;
+const SIZE = 50;
+
 const CANDIES = ['🍒','🍊','🍋','🍇','🫐','🍉','🍓'];
 
 let board = [];
-let score = 0, moves = 20, level = 1;
+let score = 0;
+let moves = 25;
+let level = 1;
+let isSwapping = false;
 
-// Create board
-function initBoard() {
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Initialize Board
+function createBoard() {
   board = [];
   for (let r = 0; r < ROWS; r++) {
     board[r] = [];
@@ -57,75 +65,159 @@ function initBoard() {
       board[r][c] = CANDIES[Math.floor(Math.random() * CANDIES.length)];
     }
   }
+  removeInitialMatches();
+}
+
+function removeInitialMatches() {
+  let matches = findMatches();
+  while (matches.length > 0) {
+    matches.forEach(m => {
+      board[m.r][m.c] = CANDIES[Math.floor(Math.random() * CANDIES.length)];
+    });
+    matches = findMatches();
+  }
+}
+
+function findMatches() {
+  let matches = [];
+  
+  // Horizontal
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS - 2; c++) {
+      if (board[r][c] && board[r][c] === board[r][c+1] && board[r][c] === board[r][c+2]) {
+        matches.push({r, c}, {r, c: c+1}, {r, c: c+2});
+      }
+    }
+  }
+  // Vertical
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS - 2; r++) {
+      if (board[r][c] && board[r][c] === board[r+1][c] && board[r][c] === board[r+2][c]) {
+        matches.push({r, c}, {r: r+1, c}, {r: r+2, c});
+      }
+    }
+  }
+  return [...new Set(matches.map(m => `${m.r},${m.c}`))].map(s => {
+    let [r, c] = s.split(',').map(Number);
+    return {r, c};
+  });
 }
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      ctx.font = '46px Arial';
+      ctx.font = '48px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = '#ffffff';
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 15;
       ctx.fillText(board[r][c], c * SIZE + SIZE/2, r * SIZE + SIZE/2 + 6);
     }
   }
 }
 
-// ==================== INPUT FIX (cel mai important) ====================
-let startPos = null;
+// ==================== INPUT (Fixat bine) ====================
+let start = null;
 
-function getGridPos(e) {
+function getPos(e) {
   const rect = canvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const x = e.touches ? e.touches[0].clientX : e.clientX;
+  const y = e.touches ? e.touches[0].clientY : e.clientY;
   return {
-    x: Math.floor((clientX - rect.left) / SIZE),
-    y: Math.floor((clientY - rect.top) / SIZE)
+    c: Math.floor((x - rect.left) / SIZE),
+    r: Math.floor((y - rect.top) / SIZE)
   };
 }
 
-// Mouse + Touch Start
-canvas.addEventListener('mousedown', (e) => {
-  startPos = getGridPos(e);
+canvas.addEventListener('pointerdown', e => {
+  start = getPos(e);
 });
 
-canvas.addEventListener('touchstart', (e) => {
-  startPos = getGridPos(e);
-}, { passive: true });
-
-// Mouse + Touch End
-canvas.addEventListener('mouseup', handleMove);
-canvas.addEventListener('touchend', handleMove);
-
-function handleMove(e) {
-  if (!startPos) return;
+canvas.addEventListener('pointerup', e => {
+  if (!start) return;
+  const end = getPos(e);
   
-  const endPos = getGridPos(e);
-  const dx = endPos.x - startPos.x;
-  const dy = endPos.y - startPos.y;
+  const dx = end.c - start.c;
+  const dy = end.r - start.r;
 
-  // Dacă a mutat doar o casetă (stânga/dreapta/sus/jos)
   if (Math.abs(dx) + Math.abs(dy) === 1) {
     // Swap
-    const temp = board[startPos.y][startPos.x];
-    board[startPos.y][startPos.x] = board[endPos.y][endPos.x];
-    board[endPos.y][endPos.x] = temp;
-
+    [board[start.r][start.c], board[end.r][end.c]] = [board[end.r][end.c], board[start.r][start.c]];
+    
     moves--;
     document.getElementById('moves').textContent = moves;
     draw();
-
-    // Aici ar veni logica de match (simplificată momentan)
-    console.log("Swap făcut la:", startPos, "→", endPos);
+    
+    // Check matches after swap
+    setTimeout(checkAndProcess, 150);
   }
+  start = null;
+});
 
-  startPos = null;
+function checkAndProcess() {
+  let matches = findMatches();
+  if (matches.length > 0) {
+    processMatches(matches);
+  } else {
+    // Invalid move - swap back (opțional)
+  }
 }
 
-// Start Game
-initBoard();
+function processMatches(matches) {
+  let points = matches.length * 10;
+  score += points;
+  document.getElementById('score').textContent = score;
+
+  matches.forEach(m => board[m.r][m.c] = null);
+
+  setTimeout(() => {
+    applyGravity();
+    refillBoard();
+    draw();
+    setTimeout(() => {
+      let newMatches = findMatches();
+      if (newMatches.length > 0) processMatches(newMatches);
+    }, 300);
+  }, 250);
+}
+
+function applyGravity() {
+  for (let c = 0; c < COLS; c++) {
+    let emptyRow = ROWS - 1;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (board[r][c] !== null) {
+        board[emptyRow][c] = board[r][c];
+        if (emptyRow !== r) board[r][c] = null;
+        emptyRow--;
+      }
+    }
+  }
+}
+
+function refillBoard() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c] === null) {
+        board[r][c] = CANDIES[Math.floor(Math.random() * CANDIES.length)];
+      }
+    }
+  }
+}
+
+function restartGame() {
+  score = 0;
+  moves = 25;
+  level = 1;
+  document.getElementById('score').textContent = score;
+  document.getElementById('moves').textContent = moves;
+  document.getElementById('level').textContent = level;
+  createBoard();
+  draw();
+}
+
+// Start
+createBoard();
 draw();
 </script>
 </body>
